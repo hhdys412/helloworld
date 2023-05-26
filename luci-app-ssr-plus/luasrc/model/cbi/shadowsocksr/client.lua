@@ -2,26 +2,29 @@
 -- Copyright (C) 2018 lean <coolsnowwolf@gmail.com> github.com/coolsnowwolf
 -- Licensed to the public under the GNU General Public License v3.
 
-local m, s, sec, o, kcp_enable
-local shadowsocksr = "shadowsocksr"
+local m, s, sec, o
 local uci = luci.model.uci.cursor()
-m = Map(shadowsocksr, translate("ShadowSocksR Plus+ Settings"),
-	translate("<h3>Support SS/SSR/V2RAY/TROJAN/NAIVEPROXY/SOCKS5/TUN etc.</h3>"))
 
+local validation = require "luci.cbi.datatypes"
+local function is_finded(e)
+	return luci.sys.exec('type -t -p "%s"' % e) ~= "" and true or false
+end
+
+m = Map("shadowsocksr", translate("ShadowSocksR Plus+ Settings"), translate("<h3>Support SS/SSR/V2RAY/XRAY/TROJAN/NAIVEPROXY/SOCKS5/TUN etc.</h3>"))
 m:section(SimpleSection).template = "shadowsocksr/status"
 
 local server_table = {}
-uci:foreach(shadowsocksr, "servers", function(s)
+uci:foreach("shadowsocksr", "servers", function(s)
 	if s.alias then
-		server_table[s[".name"]] = "[%s]:%s" %{string.upper(s.type), s.alias}
+		server_table[s[".name"]] = "[%s]:%s" % {string.upper(s.v2ray_protocol or s.type), s.alias}
 	elseif s.server and s.server_port then
-		server_table[s[".name"]] = "[%s]:%s:%s" %{string.upper(s.type), s.server, s.server_port}
+		server_table[s[".name"]] = "[%s]:%s:%s" % {string.upper(s.v2ray_protocol or s.type), s.server, s.server_port}
 	end
 end)
 
 local key_table = {}
-for key,_ in pairs(server_table) do
-	table.insert(key_table,key)
+for key, _ in pairs(server_table) do
+	table.insert(key_table, key)
 end
 
 table.sort(key_table)
@@ -32,26 +35,34 @@ s.anonymous = true
 
 o = s:option(ListValue, "global_server", translate("Main Server"))
 o:value("nil", translate("Disable"))
-for _,key in pairs(key_table) do o:value(key,server_table[key]) end
+for _, key in pairs(key_table) do
+	o:value(key, server_table[key])
+end
 o.default = "nil"
 o.rmempty = false
 
 o = s:option(ListValue, "udp_relay_server", translate("Game Mode UDP Server"))
 o:value("", translate("Disable"))
 o:value("same", translate("Same as Global Server"))
-for _,key in pairs(key_table) do o:value(key,server_table[key]) end
+for _, key in pairs(key_table) do
+	o:value(key, server_table[key])
+end
 
+if uci:get_first("shadowsocksr", 'global', 'netflix_enable', '0') ~= '0' then
 o = s:option(ListValue, "netflix_server", translate("Netflix Node"))
 o:value("nil", translate("Disable"))
 o:value("same", translate("Same as Global Server"))
-for _,key in pairs(key_table) do o:value(key,server_table[key]) end
+for _, key in pairs(key_table) do
+	o:value(key, server_table[key])
+end
 o.default = "nil"
 o.rmempty = false
 
 o = s:option(Flag, "netflix_proxy", translate("External Proxy Mode"))
 o.rmempty = false
 o.description = translate("Forward Netflix Proxy through Main Proxy")
-o.default="0"
+o.default = "0"
+end
 
 o = s:option(ListValue, "threads", translate("Multi Threads Option"))
 o:value("0", translate("Auto Threads"))
@@ -79,7 +90,7 @@ o:value("2", translate("Only Common Ports"))
 o.default = 1
 
 o = s:option(ListValue, "pdnsd_enable", translate("Resolve Dns Mode"))
-o:value("1", translate("Use Pdnsd tcp query and cache"))
+o:value("1", translate("Use DNS2TCP query"))
 o:value("2", translate("Use DNS2SOCKS query and cache"))
 o:value("0", translate("Use Local DNS Service listen port 5335"))
 o.default = 1
@@ -101,6 +112,34 @@ o:value("114.114.115.115:53", translate("Oversea Mode DNS-2 (114.114.115.115)"))
 o:depends("pdnsd_enable", "1")
 o:depends("pdnsd_enable", "2")
 o.description = translate("Custom DNS Server format as IP:PORT (default: 8.8.4.4:53)")
+o.datatype = "ip4addrport"
+
+if is_finded("chinadns-ng") then
+	o = s:option(Value, "chinadns_forward", translate("Domestic DNS Server"))
+	o:value("wan", translate("Use DNS from WAN"))
+	o:value("wan_114", translate("Use DNS from WAN and 114DNS"))
+	o:value("114.114.114.114:53", translate("Nanjing Xinfeng 114DNS (114.114.114.114)"))
+	o:value("119.29.29.29:53", translate("DNSPod Public DNS (119.29.29.29)"))
+	o:value("1.2.4.8:53", translate("CNNIC SDNS (1.2.4.8)"))
+	o:depends({pdnsd_enable = "1", run_mode = "router"})
+	o:depends({pdnsd_enable = "2", run_mode = "router"})
+	o.description = translate("Custom DNS Server format as IP:PORT (default: disabled)")
+	o.validate = function(self, value, section)
+		if (section and value) then
+			if value == "wan" or value == "wan_114" then
+				return value
+			end
+
+			if validation.ip4addrport(value) then
+				return value
+			end
+
+			return nil, translate("Expecting: %s"):format(translate("valid address:port"))
+		end
+
+		return value
+	end
+end
 
 return m
 
