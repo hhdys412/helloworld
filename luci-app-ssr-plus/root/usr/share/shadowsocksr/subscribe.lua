@@ -172,6 +172,9 @@ local function processData(szType, content)
 		result.v2ray_protocol = 'vmess'
 		result.server = info.add
 		result.server_port = info.port
+		if info.net == "tcp" then
+			info.net = "raw"
+		end
 		result.transport = info.net
 		result.alter_id = info.aid
 		result.vmess_id = info.id
@@ -194,7 +197,7 @@ local function processData(szType, content)
 			result.h2_host = info.host
 			result.h2_path = info.path
 		end
-		if info.net == 'tcp' then
+		if info.net == 'raw' or info.net == 'tcp' then
 			if info.type and info.type ~= "http" then
 				info.type = "none"
 			end
@@ -362,10 +365,9 @@ local function processData(szType, content)
 		result.vmess_id = url.user
 		result.vless_encryption = params.encryption or "none"
 		result.transport = params.type or "tcp"
-		result.tls = (params.security == "tls") and "1" or "0"
+		result.tls = (params.security == "tls" or params.security == "xtls") and "1" or "0"
 		result.tls_host = params.sni
-		result.xtls = (params.security == "xtls") and "1" or nil
-		result.tls_flow = (result.tls == "1" or result.xtls == "1" or result.reality == "1") and params.flow or nil
+		result.tls_flow = (params.security == "tls" or params.security == "reality") and params.flow or nil
 		result.fingerprint = params.fp
 		result.reality = (params.security == "reality") and "1" or "0"
 		result.reality_publickey = params.pbk and UrlDecode(params.pbk) or nil
@@ -401,7 +403,7 @@ local function processData(szType, content)
 		elseif result.transport == "grpc" then
 			result.serviceName = params.serviceName
 			result.grpc_mode = params.mode or "gun"
-		elseif result.transport == "tcp" then
+		elseif result.transport == "tcp" or result.transport == "raw" then
 			result.tcp_guise = params.headerType or "none"
 			if result.tcp_guise == "http" then
 				result.tcp_host = params.host and UrlDecode(params.host) or nil
