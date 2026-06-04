@@ -15,7 +15,7 @@ local ad_count = 0
 local ip_count = 0
 local nfip_count = 0
 local Process_list = luci.sys.exec("busybox ps -w")
-local uci = luci.model.uci.cursor()
+local uci = require "luci.model.uci".cursor()
 -- html constants
 font_blue = [[<b style=color:green>]]
 style_blue = [[<b style=color:red>]]
@@ -60,6 +60,12 @@ if Process_list:find("udp.only.ssr.reudp") then
 	reudp_run = 1
 end
 
+--[[
+if Process_list:find("tcp.udp.dual.ssr.retcp") then
+	redir_run = 1
+end
+]]--
+
 if Process_list:find("tcp.only.ssr.retcp") then
 	redir_run = 1
 end
@@ -73,10 +79,23 @@ if Process_list:find("tcp.udp.ssr.retcp") then
 	reudp_run = 1
 end
 
+--[[
+if Process_list:find("nft.ssr.retcp") then
+	redir_run = 1
+end
+]]--
+
 if Process_list:find("local.ssr.retcp") then
 	redir_run = 1
 	sock5_run = 1
 end
+
+--[[
+if Process_list:find("local.nft.ssr.retcp") then
+	redir_run = 1
+	sock5_run = 1
+end
+]]--
 
 if Process_list:find("local.udp.ssr.retcp") then
 	reudp_run = 1
@@ -92,7 +111,11 @@ if Process_list:find("ssr.server") then
 	server_run = 1
 end
 
-if Process_list:find("ssrplus/bin/dns2tcp") or Process_list:find("ssrplus/bin/mosdns") or (Process_list:find("ssrplus.dns") and Process_list:find("dns2socks.127.0.0.1.*127.0.0.1.5335")) then
+if  Process_list:find("ssrplus/bin/dns2tcp") or
+    Process_list:find("ssrplus/bin/mosdns") or
+    Process_list:find("dnsproxy.*127.0.0.1.*5335") or
+    Process_list:find("chinadns.*127.0.0.1.*5335") or
+    (Process_list:find("ssrplus.dns") and Process_list:find("dns2socks.*127.0.0.1.*127.0.0.1.5335")) then
 	pdnsd_run = 1
 end
 
@@ -155,6 +178,14 @@ if nixio.fs.access("/usr/bin/kcptun-client") then
 	end
 end
 
+s = m:field(Button, "Restart", translate("Restart ShadowSocksR Plus+"))
+s.inputtitle = translate("Restart Service")
+s.inputstyle = "reload"
+s.write = function()
+	luci.sys.call("/etc/init.d/shadowsocksr restart >/dev/null 2>&1 &")
+	luci.http.redirect(luci.dispatcher.build_url("admin", "services", "shadowsocksr", "client"))
+end
+
 s = m:field(DummyValue, "google", translate("Google Connectivity"))
 s.value = translate("No Check")
 s.template = "shadowsocksr/check"
@@ -181,10 +212,10 @@ if uci:get_first("shadowsocksr", 'global', 'apple_optimization', '0') ~= '0' the
 end
 
 if uci:get_first("shadowsocksr", 'global', 'netflix_enable', '0') ~= '0' then
-s = m:field(DummyValue, "nfip_data", translate("Netflix IP Data"))
-s.rawhtml = true
-s.template = "shadowsocksr/refresh"
-s.value = nfip_count .. " " .. translate("Records")
+	s = m:field(DummyValue, "nfip_data", translate("Netflix IP Data"))
+	s.rawhtml = true
+	s.template = "shadowsocksr/refresh"
+	s.value = nfip_count .. " " .. translate("Records")
 end
 
 if uci:get_first("shadowsocksr", 'global', 'adblock', '0') == '1' then
